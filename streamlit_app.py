@@ -1,12 +1,11 @@
+
 import streamlit as st
 import requests
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
-import json
 import numpy as np
 
 # 🎨 CONFIGURACIÓN PÁGINA
@@ -21,6 +20,7 @@ st.set_page_config(
 AIRTABLE_TOKEN = "patwjlairfW69N772.582cebb38958f780cd2d438f68a94409ffad6b4d6cab862573c88dcd66c8a420"
 BASE_ID = "appcAG3ImhfeNL6UW"
 TABLE_NAME = "Casos IA Sindical"
+
 # 🌍 COORDENADAS MUNDIALES COMPLETAS
 COORDENADAS_PAISES = {
     'España': [40.4168, -3.7038],
@@ -89,38 +89,19 @@ COORDENADAS_PAISES = {
     'Bielorrusia': [53.7098, 27.9534]
 }
 
-# 🛡️ FUNCIÓN LIMPIAR DATOS
-def clean_data_value(value):
-    """Limpia valores problemáticos para pandas"""
-    if value is None:
+# 🛡️ FUNCIÓN LIMPIAR DATOS SIMPLE
+def clean_value(value):
+    """Limpia un valor de forma simple y segura"""
+    if pd.isna(value) or value is None:
         return 'No especificado'
-    elif isinstance(value, (list, dict)):
-        return str(value)
-    elif isinstance(value, str):
-        return value.strip() if value.strip() else 'No especificado'
-    else:
-        return str(value)
+    if isinstance(value, (list, dict)):
+        return 'No especificado'
+    return str(value).strip() if str(value).strip() else 'No especificado'
 
-# 🛡️ FUNCIÓN OBTENER VALORES ÚNICOS SEGUROS
-def get_safe_unique_values(series):
-    """Obtiene valores únicos de forma segura, manejando errores"""
-    try:
-        # Limpiar la serie primero
-        cleaned_series = series.apply(clean_data_value)
-        # Eliminar valores nulos
-        cleaned_series = cleaned_series.dropna()
-        # Obtener valores únicos
-        unique_values = cleaned_series.unique()
-        # Convertir a lista y ordenar
-        return sorted([str(val) for val in unique_values if val != 'No especificado'])
-    except Exception as e:
-        st.warning(f"⚠️ Error procesando valores únicos: {str(e)}")
-        return ['No especificado']
-
-# 🎯 FUNCIÓN OBTENER DATOS AIRTABLE (CORREGIDA CON MANEJO DE ERRORES)
+# 🎯 FUNCIÓN OBTENER DATOS AIRTABLE (SIMPLIFICADA)
 @st.cache_data(ttl=300)
 def get_airtable_data():
-    """Obtiene datos de Airtable con manejo completo de errores y limpieza de datos"""
+    """Obtiene datos de Airtable con manejo robusto de errores"""
     try:
         url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
         headers = {
@@ -141,13 +122,11 @@ def get_airtable_data():
             
             if response.status_code != 200:
                 st.error(f"❌ Error conexión Airtable: {response.status_code}")
-                st.error(f"Detalle: {response.text}")
                 return pd.DataFrame()
             
             data = response.json()
             all_records.extend(data['records'])
             
-            # Verificar si hay más páginas
             if 'offset' in data:
                 offset = data['offset']
             else:
@@ -157,36 +136,37 @@ def get_airtable_data():
             st.warning("⚠️ No se encontraron registros en Airtable")
             return pd.DataFrame()
         
-        # Procesar datos con limpieza
+        # Procesar datos de forma simple
         casos_procesados = []
         for record in all_records:
-            fields = record['fields']
-            pais = clean_data_value(fields.get('País', 'No especificado'))
+            fields = record.get('fields', {})
             
-            # Obtener coordenadas
+            # Limpiar país y obtener coordenadas
+            pais = clean_value(fields.get('País'))
             if pais in COORDENADAS_PAISES:
                 lat, lon = COORDENADAS_PAISES[pais]
             else:
                 lat, lon = 0, 0
             
+            # Crear registro limpio
             caso = {
-                'ID': record['id'],
-                'Título': clean_data_value(fields.get('Título', 'Sin título')),
+                'ID': record.get('id', 'Sin ID'),
+                'Título': clean_value(fields.get('Título')),
                 'País': pais,
-                'Organización': clean_data_value(fields.get('Organización Sindical', 'No especificada')),
-                'Actores Involucrados': clean_data_value(fields.get('Actores Involucrados', 'No especificados')),
-                'Sector Productivo': clean_data_value(fields.get('Sector Productivo', 'No especificado')),
-                'Tipo de IA': clean_data_value(fields.get('Tipo de IA', 'No especificado')),
-                'Aplicación Específica': clean_data_value(fields.get('Aplicación Específica', 'No especificada')),
-                'Fecha': clean_data_value(fields.get('Fecha', 'No especificada')),
-                'Estado': clean_data_value(fields.get('Estado del Caso', 'No especificado')),
-                'Impacto': clean_data_value(fields.get('Impacto/Resultado', 'No especificado')),
-                'Retos y Limitaciones': clean_data_value(fields.get('Retos y Limitaciones', 'No especificados')),
-                'Fuente': clean_data_value(fields.get('Fuente', 'No especificada')),
-                'URL': clean_data_value(fields.get('URL', 'No disponible')),
-                'Contacto': clean_data_value(fields.get('Contacto', 'No disponible')),
-                'Notas': clean_data_value(fields.get('Notas', 'Sin notas')),
-                'Temática': clean_data_value(fields.get('Temática', 'No especificada')),
+                'Organización': clean_value(fields.get('Organización Sindical')),
+                'Actores Involucrados': clean_value(fields.get('Actores Involucrados')),
+                'Sector Productivo': clean_value(fields.get('Sector Productivo')),
+                'Tipo de IA': clean_value(fields.get('Tipo de IA')),
+                'Aplicación Específica': clean_value(fields.get('Aplicación Específica')),
+                'Fecha': clean_value(fields.get('Fecha')),
+                'Estado': clean_value(fields.get('Estado del Caso')),
+                'Impacto': clean_value(fields.get('Impacto/Resultado')),
+                'Retos y Limitaciones': clean_value(fields.get('Retos y Limitaciones')),
+                'Fuente': clean_value(fields.get('Fuente')),
+                'URL': clean_value(fields.get('URL')),
+                'Contacto': clean_value(fields.get('Contacto')),
+                'Notas': clean_value(fields.get('Notas')),
+                'Temática': clean_value(fields.get('Temática')),
                 'Latitud': lat,
                 'Longitud': lon,
                 'Fecha_Creación': record.get('createdTime', 'No disponible')
@@ -195,15 +175,10 @@ def get_airtable_data():
         
         df = pd.DataFrame(casos_procesados)
         
-        # Verificar que el DataFrame no esté vacío
+        # Verificación final
         if df.empty:
             st.warning("⚠️ DataFrame vacío después del procesamiento")
             return pd.DataFrame()
-        
-        # Limpiar datos adicionales
-        for col in df.columns:
-            if col not in ['Latitud', 'Longitud']:
-                df[col] = df[col].apply(clean_data_value)
         
         return df
         
@@ -211,56 +186,31 @@ def get_airtable_data():
         st.error(f"❌ Error inesperado: {str(e)}")
         return pd.DataFrame()
 
-# 🎯 FUNCIÓN CREAR GRÁFICOS (CORREGIDA)
-def crear_graficos(df):
-    """Crear gráficos estadísticos con manejo de errores"""
-    if df.empty:
-        return None, None, None
-    
+# 🛡️ FUNCIÓN OBTENER VALORES ÚNICOS SEGUROS (SIMPLIFICADA)
+def get_unique_values_safe(df, column):
+    """Obtiene valores únicos de forma completamente segura"""
     try:
-        # Gráfico por país
-        pais_counts = df['País'].value_counts().head(10)
-        fig_pais = px.bar(
-            x=pais_counts.values,
-            y=pais_counts.index,
-            orientation='h',
-            title="📊 Casos por País (Top 10)",
-            labels={'x': 'Número de Casos', 'y': 'País'},
-            color=pais_counts.values,
-            color_continuous_scale='Blues'
-        )
-        fig_pais.update_layout(height=400)
+        if column not in df.columns:
+            return ['No especificado']
         
-        # Gráfico por tipo de IA
-        tipo_counts = df['Tipo de IA'].value_counts()
-        fig_tipo = px.pie(
-            values=tipo_counts.values,
-            names=tipo_counts.index,
-            title="🤖 Distribución por Tipo de IA",
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
+        # Filtrar valores válidos
+        valid_values = []
+        for value in df[column]:
+            cleaned = clean_value(value)
+            if cleaned != 'No especificado':
+                valid_values.append(cleaned)
         
-        # Gráfico por estado
-        estado_counts = df['Estado'].value_counts()
-        fig_estado = px.bar(
-            x=estado_counts.index,
-            y=estado_counts.values,
-            title="📈 Estados de los Casos",
-            labels={'y': 'Número de Casos', 'x': 'Estado'},
-            color=estado_counts.values,
-            color_continuous_scale='Greens'
-        )
-        fig_estado.update_xaxes(tickangle=45)
-        
-        return fig_pais, fig_tipo, fig_estado
+        # Obtener únicos y ordenar
+        unique_values = list(set(valid_values))
+        return sorted(unique_values) if unique_values else ['No especificado']
         
     except Exception as e:
-        st.error(f"❌ Error creando gráficos: {str(e)}")
-        return None, None, None
+        st.warning(f"⚠️ Error procesando columna {column}: {str(e)}")
+        return ['No especificado']
 
 # 🎯 APLICACIÓN PRINCIPAL
 def main():
-    # HEADER CON MÉTRICAS
+    # HEADER
     st.title("🗺️ IA Sindical Dashboard - Análisis Completo")
     st.markdown("**Dashboard interactivo con filtros avanzados y actualización automática**")
     
@@ -272,56 +222,56 @@ def main():
         st.error("❌ No se pudieron cargar los datos. Verifica la conexión con Airtable.")
         st.stop()
     
-    # MÉTRICAS PRINCIPALES
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📊 Total Casos", len(df))
-    with col2:
-        st.metric("🌍 Países", df['País'].nunique())
-    with col3:
-        st.metric("🏢 Organizaciones", df['Organización'].nunique())
-    with col4:
-        casos_activos = len(df[df['Estado'].str.contains('Activo|En curso|Implementado', case=False, na=False)])
-        st.metric("🚀 Casos Activos", casos_activos)
+    # MÉTRICAS PRINCIPALES (LÍNEA 278 CORREGIDA)
+    try:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Total Casos", len(df))
+        with col2:
+            st.metric("🌍 Países", len(get_unique_values_safe(df, 'País')))
+        with col3:
+            st.metric("🏢 Organizaciones", len(get_unique_values_safe(df, 'Organización')))
+        with col4:
+            # Contar casos activos de forma segura
+            casos_activos = 0
+            for estado in df['Estado']:
+                estado_clean = clean_value(estado).lower()
+                if any(word in estado_clean for word in ['activo', 'en curso', 'implementado', 'vigente']):
+                    casos_activos += 1
+            st.metric("🚀 Casos Activos", casos_activos)
+    except Exception as e:
+        st.error(f"❌ Error en métricas: {str(e)}")
     
-    # SIDEBAR FILTROS AVANZADOS CON MANEJO DE ERRORES
+    # SIDEBAR FILTROS SIMPLIFICADOS
     st.sidebar.header("🔍 Filtros Avanzados")
     
     try:
         # Filtro por país
-        paises_disponibles = ['Todos'] + get_safe_unique_values(df['País'])
+        paises_disponibles = ['Todos'] + get_unique_values_safe(df, 'País')
         paises_seleccionados = st.sidebar.multiselect(
             "🌍 País", 
             paises_disponibles,
             default=['Todos']
         )
         
-        # Filtro por aplicación
-        aplicaciones = ['Todos'] + get_safe_unique_values(df['Aplicación Específica'])
-        aplicaciones_seleccionadas = st.sidebar.multiselect(
-            "🎯 Aplicación Específica",
-            aplicaciones,
-            default=['Todos']
-        )
-        
-        # Filtro por estado
-        estados = ['Todos'] + get_safe_unique_values(df['Estado'])
-        estados_seleccionados = st.sidebar.multiselect(
-            "📊 Estado del Caso",
-            estados,
-            default=['Todos']
-        )
-        
         # Filtro por tipo de IA
-        tipos_ia = ['Todos'] + get_safe_unique_values(df['Tipo de IA'])
+        tipos_ia = ['Todos'] + get_unique_values_safe(df, 'Tipo de IA')
         tipos_seleccionados = st.sidebar.multiselect(
             "🤖 Tipo de IA",
             tipos_ia,
             default=['Todos']
         )
         
+        # Filtro por estado
+        estados = ['Todos'] + get_unique_values_safe(df, 'Estado')
+        estados_seleccionados = st.sidebar.multiselect(
+            "📊 Estado del Caso",
+            estados,
+            default=['Todos']
+        )
+        
         # Filtro por sector
-        sectores = ['Todos'] + get_safe_unique_values(df['Sector Productivo'])
+        sectores = ['Todos'] + get_unique_values_safe(df, 'Sector Productivo')
         sectores_seleccionados = st.sidebar.multiselect(
             "🏭 Sector Productivo",
             sectores,
@@ -330,25 +280,26 @@ def main():
         
     except Exception as e:
         st.sidebar.error(f"❌ Error en filtros: {str(e)}")
-        st.stop()
+        # Valores por defecto en caso de error
+        paises_seleccionados = ['Todos']
+        tipos_seleccionados = ['Todos']
+        estados_seleccionados = ['Todos']
+        sectores_seleccionados = ['Todos']
     
-    # Aplicar filtros
+    # Aplicar filtros de forma segura
     df_filtrado = df.copy()
     
     try:
-        if 'Todos' not in paises_seleccionados:
+        if 'Todos' not in paises_seleccionados and paises_seleccionados:
             df_filtrado = df_filtrado[df_filtrado['País'].isin(paises_seleccionados)]
         
-        if 'Todos' not in aplicaciones_seleccionadas:
-            df_filtrado = df_filtrado[df_filtrado['Aplicación Específica'].isin(aplicaciones_seleccionadas)]
-        
-        if 'Todos' not in estados_seleccionados:
-            df_filtrado = df_filtrado[df_filtrado['Estado'].isin(estados_seleccionados)]
-        
-        if 'Todos' not in tipos_seleccionados:
+        if 'Todos' not in tipos_seleccionados and tipos_seleccionados:
             df_filtrado = df_filtrado[df_filtrado['Tipo de IA'].isin(tipos_seleccionados)]
         
-        if 'Todos' not in sectores_seleccionados:
+        if 'Todos' not in estados_seleccionados and estados_seleccionados:
+            df_filtrado = df_filtrado[df_filtrado['Estado'].isin(estados_seleccionados)]
+        
+        if 'Todos' not in sectores_seleccionados and sectores_seleccionados:
             df_filtrado = df_filtrado[df_filtrado['Sector Productivo'].isin(sectores_seleccionados)]
             
     except Exception as e:
@@ -360,28 +311,6 @@ def main():
     st.sidebar.subheader("📊 Resumen Filtrado")
     st.sidebar.metric("🎯 Mostrando", f"{len(df_filtrado)}/{len(df)}")
     
-    if not df_filtrado.empty:
-        st.sidebar.metric("🌍 Países Filtrados", df_filtrado['País'].nunique())
-        
-        try:
-            st.sidebar.markdown("**📊 Top Estados:**")
-            estados_count = df_filtrado['Estado'].value_counts()
-            for estado, count in estados_count.head(3).items():
-                porcentaje = (count / len(df_filtrado) * 100) if len(df_filtrado) > 0 else 0
-                st.sidebar.text(f"• {estado}: {count} ({porcentaje:.0f}%)")
-            
-            st.sidebar.markdown("**🎯 Top Aplicaciones:**")
-            apps_count = df_filtrado['Aplicación Específica'].value_counts()
-            for app, count in apps_count.head(2).items():
-                porcentaje = (count / len(df_filtrado) * 100) if len(df_filtrado) > 0 else 0
-                st.sidebar.text(f"• {app[:20]}...: {porcentaje:.0f}%")
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Error en estadísticas: {str(e)}")
-    
-    # BOTÓN LIMPIAR FILTROS
-    if st.sidebar.button("🔄 Limpiar Todos los Filtros"):
-        st.experimental_rerun()
-    
     # LAYOUT PRINCIPAL
     tab1, tab2, tab3 = st.tabs(["🗺️ Mapa Interactivo", "📊 Análisis Estadístico", "📋 Datos Detallados"])
     
@@ -391,8 +320,19 @@ def main():
         
         if not df_filtrado.empty:
             try:
-                # Crear mapa
-                m = folium.Map(location=[20, 0], zoom_start=2)
+                # Crear mapa centrado automáticamente
+                if len(df_filtrado) > 0:
+                    # Calcular centro basado en datos válidos
+                    valid_coords = df_filtrado[(df_filtrado['Latitud'] != 0) & (df_filtrado['Longitud'] != 0)]
+                    if not valid_coords.empty:
+                        center_lat = valid_coords['Latitud'].mean()
+                        center_lon = valid_coords['Longitud'].mean()
+                    else:
+                        center_lat, center_lon = 20, 0
+                else:
+                    center_lat, center_lon = 20, 0
+                
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=2)
                 
                 # Colores por tipo de IA
                 colores = {
@@ -413,34 +353,25 @@ def main():
                         color = colores.get(caso['Tipo de IA'], 'black')
                         
                         popup_html = f"""
-                        <div style="width: 350px; font-family: Arial; font-size: 12px;">
-                            <h4 style="color: #2E86AB; margin-bottom: 8px; font-size: 14px;">{caso['Título']}</h4>
+                        <div style="width: 300px; font-family: Arial; font-size: 11px;">
+                            <h4 style="color: #2E86AB; margin-bottom: 8px;">{caso['Título'][:50]}...</h4>
                             <p><strong>🌍 País:</strong> {caso['País']}</p>
-                            <p><strong>🏢 Organización:</strong> {caso['Organización']}</p>
+                            <p><strong>🏢 Organización:</strong> {caso['Organización'][:30]}...</p>
                             <p><strong>🤖 Tipo IA:</strong> {caso['Tipo de IA']}</p>
-                            <p><strong>⚙️ Aplicación:</strong> {caso['Aplicación Específica']}</p>
-                            <p><strong>🏭 Sector:</strong> {caso['Sector Productivo']}</p>
                             <p><strong>📊 Estado:</strong> {caso['Estado']}</p>
-                            <p><strong>📅 Fecha:</strong> {caso['Fecha']}</p>
-                            <p><strong>👥 Actores:</strong> {caso['Actores Involucrados'][:100]}...</p>
-                            <p><strong>💡 Impacto:</strong> {caso['Impacto'][:100]}...</p>
-                            <p><strong>⚠️ Retos:</strong> {caso['Retos y Limitaciones'][:100]}...</p>
-                            <p><strong>📞 Contacto:</strong> {caso['Contacto']}</p>
-                            <p><strong>📚 Fuente:</strong> {caso['Fuente']}</p>
-                            <p><strong>🏷️ Temática:</strong> {caso['Temática']}</p>
-                            {f'<p><strong>🔗 URL:</strong> <a href="{caso["URL"]}" target="_blank">Ver más</a></p>' if caso['URL'] != 'No disponible' else ''}
+                            <p><strong>🏭 Sector:</strong> {caso['Sector Productivo']}</p>
                         </div>
                         """
                         
                         folium.Marker(
                             location=[caso['Latitud'], caso['Longitud']],
-                            popup=folium.Popup(popup_html, max_width=400),
-                            tooltip=f"{caso['Título']} - {caso['País']}",
+                            popup=folium.Popup(popup_html, max_width=350),
+                            tooltip=f"{caso['Título'][:30]}... - {caso['País']}",
                             icon=folium.Icon(color=color, icon='info-sign')
                         ).add_to(m)
                 
                 # Mostrar mapa
-                map_data = st_folium(m, width=700, height=500)
+                st_folium(m, width=700, height=500)
                 
                 # Información del mapa
                 st.info(f"🗺️ Mostrando {len(df_filtrado)} casos en el mapa")
@@ -457,31 +388,30 @@ def main():
         
         if not df_filtrado.empty:
             try:
-                # Crear gráficos
-                fig_pais, fig_tipo, fig_estado = crear_graficos(df_filtrado)
-                
-                # Mostrar gráficos en columnas
+                # Gráfico por país
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    if fig_pais:
+                    pais_counts = df_filtrado['País'].value_counts().head(10)
+                    if not pais_counts.empty:
+                        fig_pais = px.bar(
+                            x=pais_counts.values,
+                            y=pais_counts.index,
+                            orientation='h',
+                            title="📊 Casos por País (Top 10)",
+                            labels={'x': 'Número de Casos', 'y': 'País'}
+                        )
                         st.plotly_chart(fig_pais, use_container_width=True)
-                    if fig_estado:
-                        st.plotly_chart(fig_estado, use_container_width=True)
                 
                 with col2:
-                    if fig_tipo:
+                    tipo_counts = df_filtrado['Tipo de IA'].value_counts()
+                    if not tipo_counts.empty:
+                        fig_tipo = px.pie(
+                            values=tipo_counts.values,
+                            names=tipo_counts.index,
+                            title="🤖 Distribución por Tipo de IA"
+                        )
                         st.plotly_chart(fig_tipo, use_container_width=True)
-                    
-                    # Métricas adicionales
-                    st.subheader("📈 Métricas Clave")
-                    col_m1, col_m2 = st.columns(2)
-                    with col_m1:
-                        st.metric("📊 Casos Filtrados", len(df_filtrado))
-                        st.metric("🌍 Países Únicos", df_filtrado['País'].nunique())
-                    with col_m2:
-                        st.metric("🏢 Organizaciones", df_filtrado['Organización'].nunique())
-                        st.metric("🎯 Aplicaciones", df_filtrado['Aplicación Específica'].nunique())
                 
                 # Tabla de frecuencias
                 st.subheader("📋 Análisis de Frecuencias")
@@ -491,19 +421,11 @@ def main():
                     st.write("**🌍 Top 5 Países:**")
                     paises_freq = df_filtrado['País'].value_counts().head(5)
                     st.dataframe(paises_freq.to_frame('Casos'))
-                    
-                    st.write("**🤖 Tipos de IA:**")
-                    tipos_freq = df_filtrado['Tipo de IA'].value_counts()
-                    st.dataframe(tipos_freq.to_frame('Casos'))
                 
                 with col_freq2:
                     st.write("**📊 Estados:**")
                     estados_freq = df_filtrado['Estado'].value_counts()
                     st.dataframe(estados_freq.to_frame('Casos'))
-                    
-                    st.write("**🏭 Sectores:**")
-                    sectores_freq = df_filtrado['Sector Productivo'].value_counts().head(5)
-                    st.dataframe(sectores_freq.to_frame('Casos'))
                     
             except Exception as e:
                 st.error(f"❌ Error en análisis estadístico: {str(e)}")
@@ -517,56 +439,25 @@ def main():
         
         if not df_filtrado.empty:
             try:
-                # Selector de columnas
-                todas_columnas = df_filtrado.columns.tolist()
-                columnas_por_defecto = ['Título', 'País', 'Organización', 'Tipo de IA', 'Estado', 'Fecha']
-                columnas_seleccionadas = st.multiselect(
-                    "📋 Seleccionar columnas a mostrar:",
-                    todas_columnas,
-                    default=columnas_por_defecto
+                # Mostrar datos
+                columnas_mostrar = ['Título', 'País', 'Organización', 'Tipo de IA', 'Estado', 'Fecha']
+                df_display = df_filtrado[columnas_mostrar].copy()
+                st.dataframe(df_display, use_container_width=True, height=400)
+                
+                # Botón de exportación
+                csv = df_filtrado.to_csv(index=False)
+                st.download_button(
+                    label="📤 Exportar CSV",
+                    data=csv,
+                    file_name=f"casos_ia_sindical_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv"
                 )
                 
-                if columnas_seleccionadas:
-                    df_display = df_filtrado[columnas_seleccionadas].copy()
-                    st.dataframe(df_display, use_container_width=True, height=400)
-                    
-                    # Botones de exportación
-                    col_exp1, col_exp2, col_exp3 = st.columns(3)
-                    
-                    with col_exp1:
-                        csv = df_filtrado.to_csv(index=False)
-                        st.download_button(
-                            label="📤 Exportar CSV Completo",
-                            data=csv,
-                            file_name=f"casos_ia_sindical_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                            mime="text/csv"
-                        )
-                    
-                    with col_exp2:
-                        csv_filtrado = df_display.to_csv(index=False)
-                        st.download_button(
-                            label="📤 Exportar CSV Filtrado",
-                            data=csv_filtrado,
-                            file_name=f"casos_ia_sindical_filtrado_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                            mime="text/csv"
-                        )
-                    
-                    with col_exp3:
-                        json_data = df_filtrado.to_json(orient='records', indent=2)
-                        st.download_button(
-                            label="📤 Exportar JSON",
-                            data=json_data,
-                            file_name=f"casos_ia_sindical_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                            mime="application/json"
-                        )
-                    
-                    # Búsqueda en texto
-                    st.subheader("🔍 Búsqueda en Contenido")
-                    busqueda = st.text_input("Buscar en títulos, organizaciones, notas...")
-                    
-                    if busqueda:
-                        mask = (
-                            df_filtrado['Título'].str.contains(busqueda, case=False, na=False) |
-                            df_filtrado['Organización'].str.contains(busqueda, case=False, na=False) |
-                            df_filtrado['Notas'].str.contains(busqueda, case=False, na=False) |
-                            df_filtrado['Impacto'].str.contains(bus
+            except Exception as e:
+                st.error(f"❌ Error mostrando datos: {str(e)}")
+        
+        else:
+            st.info("📋 Selecciona filtros para ver datos detallados")
+
+if __name__ == "__main__":
+    main()

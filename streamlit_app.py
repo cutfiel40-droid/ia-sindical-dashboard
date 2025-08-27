@@ -21,7 +21,7 @@ AIRTABLE_TOKEN = "patwjlairfW69N772.47b49b5d6e0d169a150a4405398d9519d2eaf5be2822
 BASE_ID = "appcAG3ImhfeNL6UW"
 TABLE_NAME = "Casos IA Sindical"
 
-# Coordenadas países EXPANDIDAS (incluye Perú)
+# Coordenadas países completas
 COORDS_PAISES = {
     'España': [40.4168, -3.7038],
     'Francia': [46.6034, 1.8883],
@@ -33,29 +33,21 @@ COORDS_PAISES = {
     'Argentina': [-38.4161, -63.6167],
     'México': [23.6345, -102.5528],
     'Canadá': [56.1304, -106.3468],
-    'Perú': [-9.1900, -75.0152],  # ← AGREGADO PERÚ
+    'Perú': [-9.1900, -75.0152],
     'Chile': [-35.6751, -71.5430],
     'Colombia': [4.5709, -74.2973],
     'Venezuela': [6.4238, -66.5897],
     'Uruguay': [-32.5228, -55.7658],
     'Ecuador': [-1.8312, -78.1834],
     'Bolivia': [-16.2902, -63.5887],
-    'Paraguay': [-23.4425, -58.4438],
-    'India': [20.5937, 77.9629],
-    'China': [35.8617, 104.1954],
-    'Japón': [36.2048, 138.2529],
-    'Australia': [-25.2744, 133.7751],
-    'Sudáfrica': [-30.5595, 22.9375],
-    'Nigeria': [9.0820, 8.6753],
-    'Kenia': [-0.0236, 37.9062],
-    'Marruecos': [31.7917, -7.0926]
+    'Paraguay': [-23.4425, -58.4438]
 }
 
-# Colores por tipo de IA EXPANDIDOS
+# Colores por tipo de IA
 COLORES_IA = {
     'Machine Learning': '#FF6B6B',
     'Procesamiento de Lenguaje Natural': '#4ECDC4',
-    'Procesamiento de Datos': '#45B7D1',  # ← AGREGADO
+    'Procesamiento de Datos': '#45B7D1',
     'Visión por Computadora': '#45B7D1',
     'Robótica': '#96CEB4',
     'IA Generativa': '#FFEAA7',
@@ -64,12 +56,12 @@ COLORES_IA = {
     'Chatbots': '#F7DC6F',
     'Reconocimiento de Voz': '#BB8FCE',
     'Sistemas Expertos': '#85C1E9',
-    'Otros': '#FFA07A'  # ← AGREGADO PARA "OTROS"
+    'Otros': '#FFA07A'
 }
 
-@st.cache_data(ttl=300)  # Cache 5 minutos
+@st.cache_data(ttl=300)
 def get_airtable_data():
-    """Obtener datos completos de Airtable con TODOS los campos"""
+    """Obtener datos de Airtable con extracción CORRECTA de títulos"""
     try:
         url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}"
         headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -77,7 +69,7 @@ def get_airtable_data():
         all_records = []
         offset = None
         
-        # Obtener todos los registros (paginación)
+        # Obtener todos los registros
         while True:
             params = {'pageSize': 100}
             if offset:
@@ -93,22 +85,28 @@ def get_airtable_data():
                 if not offset:
                     break
             else:
-                st.error(f"❌ Error Airtable: {response.status_code} - {response.text}")
+                st.error(f"❌ Error Airtable: {response.status_code}")
                 return pd.DataFrame()
         
         if not all_records:
             st.warning("⚠️ No se encontraron registros")
             return pd.DataFrame()
         
-        # Procesar registros con TODOS los campos CORREGIDOS
+        # Procesar registros con EXTRACCIÓN CORRECTA DE TÍTULOS
         casos_lista = []
         for record in all_records:
             fields = record.get('fields', {})
             
-            # CORRECCIÓN: Usar nombres exactos de Airtable
+            # 🚨 CORRECCIÓN CRÍTICA: Campo correcto "Título del Caso"
+            titulo_raw = fields.get('Título del Caso', fields.get('Título', fields.get('Title', '')))
+            if not titulo_raw or str(titulo_raw).strip() == '':
+                titulo_final = f"Caso IA {fields.get('País', 'Sin país')}"
+            else:
+                titulo_final = str(titulo_raw).strip()
+            
             caso = {
                 'ID': record.get('id', ''),
-                'Título': str(fields.get('Título', fields.get('Title', 'Sin título'))),  # ← CORREGIDO
+                'Título': titulo_final,  # ← TÍTULO CORREGIDO
                 'País': str(fields.get('País', fields.get('Country', 'No especificado'))),
                 'Organización': str(fields.get('Organización Sindical', fields.get('Organization', 'No especificado'))),
                 'Estado': str(fields.get('Estado del Caso', fields.get('Status', 'No especificado'))),
@@ -122,7 +120,6 @@ def get_airtable_data():
                 'URL': str(fields.get('URL/Enlaces', fields.get('Links', 'No especificado'))),
                 'Notas': str(fields.get('Notas Adicionales', fields.get('Additional Notes', 'Sin notas'))),
                 'Última_Actualización': str(fields.get('Última Actualización', fields.get('Last Update', 'No especificado'))),
-                # Campos adicionales
                 'Actores_Involucrados': str(fields.get('Actores Involucrados', 'No especificado')),
                 'Aplicación_Específica': str(fields.get('Aplicación Específica', 'No especificado')),
                 'Riesgos_Identificados': str(fields.get('Riesgos Identificados', 'No especificado')),
@@ -133,12 +130,6 @@ def get_airtable_data():
         
         df = pd.DataFrame(casos_lista)
         st.success(f"✅ Datos cargados: {len(df)} casos de IA sindical")
-        
-        # DEBUG: Mostrar información de depuración
-        st.sidebar.markdown("### 🔍 Debug Info")
-        st.sidebar.write(f"**Registros totales**: {len(df)}")
-        st.sidebar.write(f"**Países únicos**: {df['País'].nunique()}")
-        st.sidebar.write(f"**Países**: {list(df['País'].unique())}")
         
         return df
         
@@ -187,27 +178,21 @@ def aplicar_filtros(df, filtros):
     """Aplicar todos los filtros al DataFrame"""
     df_filtrado = df.copy()
     
-    # Filtro país
     if filtros['pais'] != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['País'] == filtros['pais']]
     
-    # Filtro organización
     if filtros['organizacion'] != 'Todas':
         df_filtrado = df_filtrado[df_filtrado['Organización'] == filtros['organizacion']]
     
-    # Filtro tipo IA
     if filtros['tipo_ia'] != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Tipo_IA'] == filtros['tipo_ia']]
     
-    # Filtro estado
     if filtros['estado'] != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Estado'] == filtros['estado']]
     
-    # Filtro sector
     if filtros['sector'] != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Sector'] == filtros['sector']]
     
-    # Búsqueda por texto
     if filtros['busqueda']:
         texto_busqueda = filtros['busqueda'].lower()
         mask = (
@@ -220,11 +205,11 @@ def aplicar_filtros(df, filtros):
     return df_filtrado
 
 def crear_mapa_profesional(df):
-    """Crear mapa interactivo profesional CORREGIDO"""
+    """Crear mapa interactivo con TÍTULOS REALES en popups"""
     if df.empty:
         return None
     
-    # Calcular centro del mapa basado en datos
+    # Calcular centro del mapa
     paises_con_datos = df['País'].value_counts()
     if len(paises_con_datos) == 1:
         pais_principal = paises_con_datos.index[0]
@@ -245,22 +230,17 @@ def crear_mapa_profesional(df):
         tiles='OpenStreetMap'
     )
     
-    # Contador de marcadores para debug
-    marcadores_agregados = 0
-    
-    # Agregar marcadores por país
+    # Agregar marcadores por país con TÍTULOS REALES
     for pais, casos_pais in df.groupby('País'):
         if pais in COORDS_PAISES:
             lat, lon = COORDS_PAISES[pais]
             
             # Contar casos por tipo de IA
             tipos_ia_count = casos_pais['Tipo_IA'].value_counts()
-            
-            # Determinar color del marcador
             tipo_principal = tipos_ia_count.index[0] if len(tipos_ia_count) > 0 else 'Otros'
             color_hex = COLORES_IA.get(tipo_principal, '#FFA07A')
             
-            # Crear popup con información detallada CORREGIDA
+            # Crear popup con TÍTULOS REALES CORREGIDOS
             popup_html = f"""
             <div style="width: 350px; font-family: Arial;">
                 <h3 style="color: {color_hex}; margin-bottom: 10px;">🌍 {pais}</h3>
@@ -271,14 +251,15 @@ def crear_mapa_profesional(df):
                 <ul style="margin: 0; padding-left: 20px;">
             """
             
-            for _, caso in casos_pais.head(5).iterrows():  # Mostrar máximo 5 casos
-                titulo = caso['Título'] if caso['Título'] and caso['Título'] != 'Sin título' else 'Caso sin título'
-                organizacion = caso['Organización'] if caso['Organización'] != 'No especificado' else 'Org. no especificada'
+            for _, caso in casos_pais.head(5).iterrows():
+                # CORRECCIÓN CRÍTICA: Usar título real extraído
+                titulo_mostrar = caso['Título'] if caso['Título'] else f"Caso IA {pais}"
+                organizacion = caso['Organización'] if caso['Organización'] != 'No especificado' else 'Organización no especificada'
                 estado = caso['Estado'] if caso['Estado'] != 'No especificado' else 'Estado no especificado'
                 
                 popup_html += f"""
                 <li style="margin-bottom: 8px;">
-                    <strong style="color: #2E86AB;">{titulo}</strong><br>
+                    <strong style="color: #2E86AB;">{titulo_mostrar}</strong><br>
                     <span style="font-size: 12px;">🏢 {organizacion}</span><br>
                     <span style="font-size: 12px;">📊 {estado}</span>
                 </li>
@@ -289,7 +270,7 @@ def crear_mapa_profesional(df):
             
             popup_html += "</ul></div>"
             
-            # Determinar color de marcador para Folium
+            # Determinar color de marcador
             if len(casos_pais) > 3:
                 folium_color = 'red'
             elif len(casos_pais) > 1:
@@ -304,13 +285,6 @@ def crear_mapa_profesional(df):
                 tooltip=f"{pais}: {len(casos_pais)} casos ({tipo_principal})",
                 icon=folium.Icon(color=folium_color, icon='info-sign')
             ).add_to(m)
-            
-            marcadores_agregados += 1
-        else:
-            st.sidebar.warning(f"⚠️ País sin coordenadas: {pais}")
-    
-    # Debug info
-    st.sidebar.write(f"**Marcadores en mapa**: {marcadores_agregados}")
     
     return m
 
@@ -406,7 +380,7 @@ def main():
     else:
         st.warning("⚠️ No hay casos que coincidan con los filtros seleccionados")
     
-    # Tabla completa expandible CORREGIDA
+    # Tabla completa expandible
     st.subheader("📋 Tabla Completa de Casos")
     
     if not df_filtrado.empty:

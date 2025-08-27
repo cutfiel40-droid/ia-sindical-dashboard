@@ -129,7 +129,7 @@ def get_airtable_data():
             st.warning("⚠️ No se encontraron registros en Airtable")
             return pd.DataFrame()
         
-        # Procesar datos
+        # Procesar datos - NOMBRES CORREGIDOS
         casos_procesados = []
         for record in all_records:
             fields = record['fields']
@@ -146,14 +146,14 @@ def get_airtable_data():
                 'Título': fields.get('Título', 'Sin título'),
                 'País': pais,
                 'Organización': fields.get('Organización Sindical', 'No especificada'),
-                'Actores_Involucrados': fields.get('Actores Involucrados', 'No especificados'),
-                'Sector_Productivo': fields.get('Sector Productivo', 'No especificado'),
-                'Tipo_IA': fields.get('Tipo de IA', 'No especificado'),
-                'Aplicación_Específica': fields.get('Aplicación Específica', 'No especificada'),
+                'Actores Involucrados': fields.get('Actores Involucrados', 'No especificados'),
+                'Sector Productivo': fields.get('Sector Productivo', 'No especificado'),
+                'Tipo de IA': fields.get('Tipo de IA', 'No especificado'),
+                'Aplicación Específica': fields.get('Aplicación Específica', 'No especificada'),
                 'Fecha': fields.get('Fecha', 'No especificada'),
                 'Estado': fields.get('Estado del Caso', 'No especificado'),
                 'Impacto': fields.get('Impacto/Resultado', 'No especificado'),
-                'Retos_Limitaciones': fields.get('Retos y Limitaciones', 'No especificados'),
+                'Retos y Limitaciones': fields.get('Retos y Limitaciones', 'No especificados'),
                 'Fuente': fields.get('Fuente', 'No especificada'),
                 'URL': fields.get('URL', 'No disponible'),
                 'Contacto': fields.get('Contacto', 'No disponible'),
@@ -192,9 +192,9 @@ def crear_graficos(df):
     
     # Gráfico por tipo de IA
     fig_tipo = px.pie(
-        df['Tipo_IA'].value_counts().reset_index(),
+        df['Tipo de IA'].value_counts().reset_index(),
         values='count',
-        names='Tipo_IA',
+        names='Tipo de IA',
         title="🤖 Distribución por Tipo de IA",
         color_discrete_sequence=px.colors.qualitative.Set3
     )
@@ -251,7 +251,7 @@ def main():
     )
     
     # Filtro por aplicación
-    aplicaciones = ['Todos'] + sorted(df['Aplicación_Específica'].unique().tolist())
+    aplicaciones = ['Todos'] + sorted(df['Aplicación Específica'].unique().tolist())
     aplicaciones_seleccionadas = st.sidebar.multiselect(
         "🎯 Aplicación Específica",
         aplicaciones,
@@ -267,7 +267,7 @@ def main():
     )
     
     # Filtro por tipo de IA
-    tipos_ia = ['Todos'] + sorted(df['Tipo_IA'].unique().tolist())
+    tipos_ia = ['Todos'] + sorted(df['Tipo de IA'].unique().tolist())
     tipos_seleccionados = st.sidebar.multiselect(
         "🤖 Tipo de IA",
         tipos_ia,
@@ -275,7 +275,7 @@ def main():
     )
     
     # Filtro por sector
-    sectores = ['Todos'] + sorted(df['Sector_Productivo'].unique().tolist())
+    sectores = ['Todos'] + sorted(df['Sector Productivo'].unique().tolist())
     sectores_seleccionados = st.sidebar.multiselect(
         "🏭 Sector Productivo",
         sectores,
@@ -289,16 +289,16 @@ def main():
         df_filtrado = df_filtrado[df_filtrado['País'].isin(paises_seleccionados)]
     
     if 'Todos' not in aplicaciones_seleccionadas:
-        df_filtrado = df_filtrado[df_filtrado['Aplicación_Específica'].isin(aplicaciones_seleccionadas)]
+        df_filtrado = df_filtrado[df_filtrado['Aplicación Específica'].isin(aplicaciones_seleccionadas)]
     
     if 'Todos' not in estados_seleccionados:
         df_filtrado = df_filtrado[df_filtrado['Estado'].isin(estados_seleccionados)]
     
     if 'Todos' not in tipos_seleccionados:
-        df_filtrado = df_filtrado[df_filtrado['Tipo_IA'].isin(tipos_seleccionados)]
+        df_filtrado = df_filtrado[df_filtrado['Tipo de IA'].isin(tipos_seleccionados)]
     
     if 'Todos' not in sectores_seleccionados:
-        df_filtrado = df_filtrado[df_filtrado['Sector_Productivo'].isin(sectores_seleccionados)]
+        df_filtrado = df_filtrado[df_filtrado['Sector Productivo'].isin(sectores_seleccionados)]
     
     # ESTADÍSTICAS SIDEBAR
     st.sidebar.markdown("---")
@@ -315,7 +315,7 @@ def main():
             st.sidebar.text(f"• {estado}: {count} ({porcentaje:.0f}%)")
         
         st.sidebar.markdown("**🎯 Top Aplicaciones:**")
-        apps_count = df_filtrado['Aplicación_Específica'].value_counts()
+        apps_count = df_filtrado['Aplicación Específica'].value_counts()
         for app, count in apps_count.head(2).items():
             porcentaje = (count / len(df_filtrado) * 100) if len(df_filtrado) > 0 else 0
             st.sidebar.text(f"• {app[:20]}...: {porcentaje:.0f}%")
@@ -351,21 +351,21 @@ def main():
             # Agregar marcadores
             for _, caso in df_filtrado.iterrows():
                 if caso['Latitud'] != 0 and caso['Longitud'] != 0:
-                    color = colores.get(caso['Tipo_IA'], 'black')
+                    color = colores.get(caso['Tipo de IA'], 'black')
                     
                     popup_html = f"""
                     <div style="width: 350px; font-family: Arial; font-size: 12px;">
                         <h4 style="color: #2E86AB; margin-bottom: 8px; font-size: 14px;">{caso['Título']}</h4>
                         <p><strong>🌍 País:</strong> {caso['País']}</p>
                         <p><strong>🏢 Organización:</strong> {caso['Organización']}</p>
-                        <p><strong>🤖 Tipo IA:</strong> {caso['Tipo_IA']}</p>
-                        <p><strong>⚙️ Aplicación:</strong> {caso['Aplicación_Específica']}</p>
-                        <p><strong>🏭 Sector:</strong> {caso['Sector_Productivo']}</p>
+                        <p><strong>🤖 Tipo IA:</strong> {caso['Tipo de IA']}</p>
+                        <p><strong>⚙️ Aplicación:</strong> {caso['Aplicación Específica']}</p>
+                        <p><strong>🏭 Sector:</strong> {caso['Sector Productivo']}</p>
                         <p><strong>📊 Estado:</strong> {caso['Estado']}</p>
                         <p><strong>📅 Fecha:</strong> {caso['Fecha']}</p>
-                        <p><strong>👥 Actores:</strong> {caso['Actores_Involucrados'][:100]}...</p>
+                        <p><strong>👥 Actores:</strong> {caso['Actores Involucrados'][:100]}...</p>
                         <p><strong>💡 Impacto:</strong> {caso['Impacto'][:100]}...</p>
-                        <p><strong>⚠️ Retos:</strong> {caso['Retos_Limitaciones'][:100]}...</p>
+                        <p><strong>⚠️ Retos:</strong> {caso['Retos y Limitaciones'][:100]}...</p>
                         <p><strong>📞 Contacto:</strong> {caso['Contacto']}</p>
                         <p><strong>📚 Fuente:</strong> {caso['Fuente']}</p>
                         <p><strong>🏷️ Temática:</strong> {caso['Temática']}</p>
@@ -418,7 +418,7 @@ def main():
                     st.metric("🌍 Países Únicos", df_filtrado['País'].nunique())
                 with col_m2:
                     st.metric("🏢 Organizaciones", df_filtrado['Organización'].nunique())
-                    st.metric("🎯 Aplicaciones", df_filtrado['Aplicación_Específica'].nunique())
+                    st.metric("🎯 Aplicaciones", df_filtrado['Aplicación Específica'].nunique())
             
             # Tabla de frecuencias
             st.subheader("📋 Análisis de Frecuencias")
@@ -430,7 +430,7 @@ def main():
                 st.dataframe(paises_freq.to_frame('Casos'))
                 
                 st.write("**🤖 Tipos de IA:**")
-                tipos_freq = df_filtrado['Tipo_IA'].value_counts()
+                tipos_freq = df_filtrado['Tipo de IA'].value_counts()
                 st.dataframe(tipos_freq.to_frame('Casos'))
             
             with col_freq2:
@@ -439,7 +439,7 @@ def main():
                 st.dataframe(estados_freq.to_frame('Casos'))
                 
                 st.write("**🏭 Sectores:**")
-                sectores_freq = df_filtrado['Sector_Productivo'].value_counts().head(5)
+                sectores_freq = df_filtrado['Sector Productivo'].value_counts().head(5)
                 st.dataframe(sectores_freq.to_frame('Casos'))
         
         else:
@@ -452,7 +452,7 @@ def main():
         if not df_filtrado.empty:
             # Selector de columnas
             todas_columnas = df_filtrado.columns.tolist()
-            columnas_por_defecto = ['Título', 'País', 'Organización', 'Tipo_IA', 'Estado', 'Fecha']
+            columnas_por_defecto = ['Título', 'País', 'Organización', 'Tipo de IA', 'Estado', 'Fecha']
             columnas_seleccionadas = st.multiselect(
                 "📋 Seleccionar columnas a mostrar:",
                 todas_columnas,
